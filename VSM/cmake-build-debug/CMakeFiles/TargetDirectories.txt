@@ -1,0 +1,3 @@
+/Users/larsholdijk/Documents/University/Computing Science Year 3/Operating Systems/Lab 2/VSM/cmake-build-debug/CMakeFiles/rebuild_cache.dir
+/Users/larsholdijk/Documents/University/Computing Science Year 3/Operating Systems/Lab 2/VSM/cmake-build-debug/CMakeFiles/edit_cache.dir
+/Users/larsholdijk/Documents/University/Computing Science Year 3/Operating Systems/Lab 2/VSM/cmake-build-debug/CMakeFiles/VSM.dir
