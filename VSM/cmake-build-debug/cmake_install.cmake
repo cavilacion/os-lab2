@@ -1,4 +1,4 @@
-# Install script for directory: /Users/larsholdijk/Documents/University/Computing Science Year 3/Operating Systems/Lab 2/VSM
+# Install script for directory: /Users/larsholdijk/Documents/University/Computing Science Year 3/Operating Systems/os-lab2/VSM
 
 # Set the install prefix
 if(NOT DEFINED CMAKE_INSTALL_PREFIX)
@@ -35,5 +35,5 @@ endif()
 
 string(REPLACE ";" "\n" CMAKE_INSTALL_MANIFEST_CONTENT
        "${CMAKE_INSTALL_MANIFEST_FILES}")
-file(WRITE "/Users/larsholdijk/Documents/University/Computing Science Year 3/Operating Systems/Lab 2/VSM/cmake-build-debug/${CMAKE_INSTALL_MANIFEST}"
+file(WRITE "/Users/larsholdijk/Documents/University/Computing Science Year 3/Operating Systems/os-lab2/VSM/cmake-build-debug/${CMAKE_INSTALL_MANIFEST}"
      "${CMAKE_INSTALL_MANIFEST_CONTENT}")
