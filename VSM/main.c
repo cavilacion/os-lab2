@@ -35,6 +35,22 @@ void safeMProtect(void *p, size_t size, int prot){
     }
 }
 
+void safeRead(int pipe, void *p, size_t size){
+    ssize_t result = read(pipe, p, size);
+    if(result < 0 ){
+        perror("read failed\n");
+        exit(EXIT_FAILURE);
+    }
+}
+
+void safeWrite(int pipe, void *p, size_t size){
+    ssize_t result = write(pipe, p, size);
+    if(result < 0 ){
+        perror("write failed\n");
+        exit(EXIT_FAILURE);
+    }
+}
+
 void sendSignal(int pid, int signal){
     if(kill(pid, signal)){
         perror("mprotect failed\n");
@@ -74,27 +90,23 @@ void removeChildFromActives(int childPID){
     }
 }
 
-int retrieveUpToDateListFromChild(int pid){
-    close(retrieve_from_child[WRITE]);
-    read(retrieve_from_child[READ], page, pagesize);
+int retrieveUpToDateListFromChild(){
+    safeRead(retrieve_from_child[READ], page, pagesize);
 }
 
 int sendUpToDateListToChild(){
-    close(retrieve_from_parent[READ]);
-    write(retrieve_from_parent[WRITE], page, pagesize);
+    safeWrite(retrieve_from_parent[WRITE], page, pagesize);
 }
 
 /// CHILD METHODS
 int sendUpToDateListToParent(){
-    close(retrieve_from_child[READ]);
-    write(retrieve_from_child[WRITE], page, pagesize);
+    safeWrite(retrieve_from_child[WRITE], page, pagesize);
 }
 
 int retrieveUpToDateListFromParent(){
     sendSignal(parent, SIGUSR2);
     safeMProtect(page, pagesize, PROT_WRITE);
-    close(retrieve_from_parent[WRITE]);
-    read(retrieve_from_parent[READ], page, pagesize);
+    safeRead(retrieve_from_parent[READ], page, pagesize);
 }
 
 
