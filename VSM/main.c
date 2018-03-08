@@ -11,130 +11,35 @@
 #define WRITE 1 /* Write end of pipe */
 
 void *page;
-
 size_t pagesize;
-int parent,
-        child[2];
+int parent;
+
+// pipes
 int retrieve_from_child[2];
 int retrieve_from_parent[2];
-
-int lastUpdatedPID;
 
 // Child specific
 int currentProtection;
 
-// HELPER FUNCTIONS
-int pidOfOtherChild(int ownPid){
-    if (child[0] == ownPid){
-        return child[1];
-    }
-    return child[0];
-}
+// Parent specific
+int lastUpdatedPID;
+int child[2];
 
-int childNumber(int ownPid){
-    if (child[0] == ownPid){
-        return 0;
-    }
-    return 1;
-}
+/// HELPER FUNCTIONS
 
-char *currentProcess(){
-    if(getpid() == parent){
-        return "PARENT";
-    } return "CHILD";
-}
-
-int retrieveUpToDateListFromChild(){
-    printf("%s(%d): retrieving most up to date list from %d,\n", currentProcess(), getpid(), lastUpdatedPID);
-    kill(lastUpdatedPID, SIGUSR1);
-    //mprotect(page, pagesize, PROT_WRITE | PROT_NONE);
-    //close(retrieve_from_child[WRITE]);
-    read(retrieve_from_child[READ], page, pagesize);
-    //close(retrieve_from_child[READ]);
-    printf("%s(%d): retrieved the new x = %d\n", currentProcess(), getpid(), *(int *)page);
-}
-
-int sendUpToDateListToParent(){
-    printf("%s(%d): writing page info with value %d\n", currentProcess(), getpid(), *(int *)page);
-    //close(retrieve_from_child[READ]);
-    write(retrieve_from_child[WRITE], page, pagesize);
-    //close(retrieve_from_child[WRITE]);
-    printf("%s(%d): writing completed \n", currentProcess(), getpid());
-}
-
-int sendUpToDateListToChild(){
-    printf("%s(%d): writing page info with value %d\n", currentProcess(), getpid(), *(int *)page);
-    //close(retrieve_from_parent[READ]);
-    write(retrieve_from_parent[WRITE], page, pagesize);
-    //close(retrieve_from_parent[WRITE]);
-    printf("%s: writing completed \n", getpid());
-}
-
-int retrieveUpToDateListFromParent(){
-    kill(parent, SIGUSR2);
-    printf("%s(%d): retrieving list from parent\n", currentProcess(), getpid());
-    mprotect(page, pagesize, PROT_WRITE);
-    //close(retrieve_from_parent[WRITE]);
-    read(retrieve_from_parent[READ], page, pagesize);
-    //close(retrieve_from_parent[READ]);
-    printf("%s(%d): retrieved the new x form parent = %d\n", currentProcess(), getpid(), *(int *)page);
-}
-
-void handler(int sig, siginfo_t *si, void *unused){
-    if(getpid() == parent){
-        exit(EXIT_SUCCESS);
-    }
-    if(currentProtection == PROT_READ) {
-        printf("%s(%d): in handler for writing\n", currentProcess(), getpid());
-        mprotect(page, pagesize, PROT_WRITE | PROT_WRITE);
-        currentProtection = PROT_WRITE;
-        kill(parent, SIGUSR1);
-        printf("Parent = %d\n", parent);
-    } else if(currentProtection == PROT_NONE){
-        printf("%s(%d): in handler for reading\n", currentProcess(), getpid());
-        retrieveUpToDateListFromParent();
-        mprotect(page, pagesize, PROT_READ);
-        currentProtection = PROT_READ;
-    } else {
-        printf("NO CLUE\n");
+void safeMProtect(void *p, size_t size, int prot){
+    int result = mprotect(p, size, prot);
+    if(result != 0){
+        perror("mprotect failed\n");
+        exit(EXIT_FAILURE);
     }
 }
 
-void sig1Handler(int sig, siginfo_t *si, void *unused){
-    printf("%s(%d): in sig1Handler\n", currentProcess(), getpid());
-    if(getpid() == parent){
-        //mprotect(page, pagesize, PROT_WRITE | PROT_NONE);
-        lastUpdatedPID = si->si_pid;
-        printf("%s(%d): Updating other child \n", currentProcess(), getpid());
-        kill(pidOfOtherChild(si->si_pid),SIGUSR2); // Notify other child of updated page
-    } else {
-        sendUpToDateListToParent();
+void sendSignal(int pid, int signal){
+    if(kill(pid, signal)){
+        perror("mprotect failed\n");
+        exit(EXIT_FAILURE);
     }
-}
-
-void sig2Handler(int sig, siginfo_t *si, void *unused){
-    printf("%s(%d): in sig2Handler\n", currentProcess(), getpid());
-    if(getpid() == parent) {
-        retrieveUpToDateListFromChild();
-        sendUpToDateListToChild();
-    } else {    // in child
-        printf("%s(%d): protection set to PROT_NONE \n", currentProcess(), getpid());
-        mprotect(page, pagesize, PROT_NONE);
-        currentProtection = PROT_NONE;
-    }
-}
-
-void procPingPong(const int whoami, int *sharedTurnVariable) {
-    printf("%s(%d): Starting proces! \n", currentProcess(), getpid());
-    for(int count = 0; count < 5; ++count) {
-        printf("%d : Shared variable = %d \n", getpid(), *sharedTurnVariable);
-        while(whoami != *sharedTurnVariable)
-            ; //busy waiting
-        printf(whoami == 0 ? "Ping\n" : "...Pong\n");
-        *sharedTurnVariable = 1 - whoami;
-        printf("%s(%d): Shared variable set to = %d \n", currentProcess(), getpid(), *sharedTurnVariable);
-    }
-    exit(EXIT_SUCCESS);
 }
 
 struct sigaction createSigAction(void (*handler)(int, siginfo_t *, void *), int sig){
@@ -149,8 +54,124 @@ struct sigaction createSigAction(void (*handler)(int, siginfo_t *, void *), int 
     return sa;
 }
 
+/// PARENT METHODS
+
+void notifyOthers(int sendingPID){
+    for(int i = 0 ; i < 2 ; i++){
+        if(child[i] == sendingPID) continue; // No need to notify yourself
+        if(child[i] != -1){ // Child is still active
+            sendSignal(child[i],SIGUSR2); // Notify other child of updated page
+        }
+    }
+}
+
+void removeChildFromActives(int childPID){
+    for(int i = 0 ; i < 2 ; i++){
+        if(child[i] == childPID){
+            child[i] = -1;
+            return;
+        }
+    }
+}
+
+int retrieveUpToDateListFromChild(int pid){
+    close(retrieve_from_child[WRITE]);
+    read(retrieve_from_child[READ], page, pagesize);
+}
+
+int sendUpToDateListToChild(){
+    close(retrieve_from_parent[READ]);
+    write(retrieve_from_parent[WRITE], page, pagesize);
+}
+
+/// CHILD METHODS
+int sendUpToDateListToParent(){
+    close(retrieve_from_child[READ]);
+    write(retrieve_from_child[WRITE], page, pagesize);
+}
+
+int retrieveUpToDateListFromParent(){
+    sendSignal(parent, SIGUSR2);
+    safeMProtect(page, pagesize, PROT_WRITE);
+    close(retrieve_from_parent[WRITE]);
+    read(retrieve_from_parent[READ], page, pagesize);
+}
+
+
+/// AT EXIT
+void closing(){
+    if(parent == getpid()){ // Parent exit
+        for(int i = 0; i < 2 ; i++){
+            if(child[i] != -1){
+                sendSignal(9, child[i]);
+            }
+        }
+    } else {
+        // Child is exiting, we need to make sure the parent is up to date
+        sendUpToDateListToParent();
+    }
+
+}
+
+/// SIGNAL HANDLERS
+void handler(int sig, siginfo_t *si, void *unused){
+    if(currentProtection == PROT_READ) {
+        // The child is trying to write
+        sendSignal(parent, SIGUSR1);
+        safeMProtect(page, pagesize, PROT_READ | PROT_WRITE);
+        currentProtection = PROT_READ | PROT_WRITE;
+    } else if(currentProtection == PROT_NONE){
+        retrieveUpToDateListFromParent();
+        safeMProtect(page, pagesize, PROT_READ);
+        currentProtection = PROT_READ;
+    } else {
+        printf("NO CLUE\n");
+    }
+}
+
+void sig1Handler(int sig, siginfo_t *si, void *unused){
+    if(getpid() == parent){
+        lastUpdatedPID = si->si_pid;
+        notifyOthers(si->si_pid);
+    } else {
+        sendUpToDateListToParent();
+    }
+}
+
+void sig2Handler(int sig, siginfo_t *si, void *unused){
+    if(getpid() == parent) {
+        if(lastUpdatedPID != 0){ // Parent is not most up to date
+            sendSignal(lastUpdatedPID, SIGUSR1);
+            retrieveUpToDateListFromChild(lastUpdatedPID);
+        }
+        sendUpToDateListToChild();
+    } else {    // in child
+        safeMProtect(page, pagesize, PROT_NONE);
+        currentProtection = PROT_NONE;
+    }
+}
+
+void sigChldHandler(int sig, siginfo_t *si, void *unused){
+    removeChildFromActives(si->si_pid);
+    retrieveUpToDateListFromChild(si->si_pid);
+    lastUpdatedPID = 0;
+}
+
+
+/// PING PONG PROCESS
+void procPingPong(const int whoami, int *sharedTurnVariable) {
+    for(int count = 0; count < 5; ++count) {
+        while(whoami != *sharedTurnVariable)
+            ; //busy waiting
+        printf(whoami == 0 ? "Ping\n" : "...Pong\n");
+        *sharedTurnVariable = 1 - whoami;
+    }
+    exit(EXIT_SUCCESS);
+}
+
 int main(int argc, char *argv[]){
-    int  status = 0;
+
+    atexit(closing);
 
     parent = getpid();
 
@@ -158,8 +179,9 @@ int main(int argc, char *argv[]){
     struct sigaction sa1 = createSigAction(handler, 11);
     struct sigaction sa2 = createSigAction(sig1Handler, SIGUSR1);
     struct sigaction sa3 = createSigAction(sig2Handler, SIGUSR2);
+    struct sigaction sa4 = createSigAction(sigChldHandler, SIGCHLD);
 
-    pagesize = sysconf(_SC_PAGE_SIZE);
+    pagesize = (size_t)sysconf(_SC_PAGE_SIZE);
 
     if (posix_memalign(&page, pagesize, pagesize) != 0) {
         fprintf(stderr, "Fatal error: aligned memory allocation failed.\n");
@@ -168,30 +190,38 @@ int main(int argc, char *argv[]){
 
     int *sharedVariable = page;
 
-        if (pipe(retrieve_from_child) == -1) {
-            perror("pipe\n");
-            exit(EXIT_FAILURE);
-        }
+    // Create communication pipes
+    if (pipe(retrieve_from_child) == -1) {
+        perror("pipe\n");
+        exit(EXIT_FAILURE);
+    }
     if (pipe(retrieve_from_parent) == -1) {
         perror("pipe\n");
         exit(EXIT_FAILURE);
     }
 
-
+    // Start child processes
     for(int i = 0;i<2;i++){
         child[i] = fork();
         if(child[i] < 0){
             perror("Fork failed: abort\n");
             exit(EXIT_FAILURE);
         } else if(!child[i]){
-            mprotect(page, pagesize, PROT_READ);
+            safeMProtect(page, pagesize, PROT_READ);
             currentProtection = PROT_READ;
+            sleep(1);       // This is ugly, but we don't want to add more complexity by introducing a starting signal
             procPingPong(i, sharedVariable);
         }
     }
 
-    waitpid(child[0], &status, 0);
-    waitpid(child[1], &status, 0);
+    int  statusChildOne, statusChildTwo;
+    do {
+        waitpid(child[0], &statusChildOne, 0);
+    } while(!WIFEXITED(statusChildOne));
+
+    do{
+        waitpid(child[1], &statusChildTwo, 0);
+    } while(!WIFEXITED(statusChildTwo));
 
     free(page);
 
