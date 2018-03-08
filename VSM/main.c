@@ -209,7 +209,7 @@ int main(int argc, char *argv[]){
         } else if(!child[i]){
             safeMProtect(page, pagesize, PROT_READ);
             currentProtection = PROT_READ;
-            sleep(1);       // This is ugly, but we don't want to add more complexity by introducing a starting signal
+            sleep(1);       // This is ugly and unsafe, but we don't want to add more complexity by introducing a starting signal
             procPingPong(i, sharedVariable);
         }
     }
