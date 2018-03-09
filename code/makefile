@@ -1,25 +1,15 @@
-CFLAGS=-std=c99
+CC=gcc
+CFLAGS=-O2 -Wall
+all: scanner parser
+	${CC} -o a.out ${CFLAGS} parser.tab.c -ll -lm -lfl
 
-all: ring execute duplicates clean
-
-copy:
-	cp ring execute duplicates /usr/bin
-
-ring: ring.c
-	gcc $(CFLAGS) -o ring ring.c
-
-execute: execute.c
-	gcc $(CFLAGS) -o execute execute.c
-
-duplicates: ex3/duplicates.c ex3/allocs.o ex3/directoryInfo.o
-	gcc -g $(CFLAGS) -o duplicates ex3/duplicates.c ex3/allocs.o ex3/directoryInfo.o
-
-clean: 
+scanner: scanner.fl
+	flex scanner.fl
+parser: parser.y
+	bison -d -v parser.y
+clean:
+	rm -f parser.tab.c
+	rm -f parser.tab.h
+	rm -f lex.yy.c
 	rm -f *.o
-	rm -f ex3/*.o
-	rm -f #*
-
-remove:
-	rm -f ring execute duplicates
-
-
+	rm -f *~

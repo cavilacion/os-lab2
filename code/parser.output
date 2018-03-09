@@ -1,0 +1,288 @@
+Terminals unused in grammar
+
+   INVALID
+
+
+Grammar
+
+    0 $accept: command $end
+
+    1 command: pipeline
+    2        | pipeline BACKGROUND
+
+    3 $@1: %empty
+
+    4 pipeline: simple_command $@1 pipeline2
+
+    5 pipeline2: PIPE newlines pipeline
+    6          | %empty
+
+    7 newlines: '\n' newlines
+    8         | %empty
+
+    9 $@2: %empty
+
+   10 simple_command: $@2 cmd_element simple_command2
+
+   11 simple_command2: cmd_element simple_command2
+   12                | %empty
+
+   13 cmd_element: WORD
+   14            | redirection
+
+   15 redirection: IN WORD
+   16            | OUT WORD
+
+
+Terminals, with rules where they appear
+
+$end (0) 0
+'\n' (10) 7
+error (256)
+PIPE (258) 5
+IN (259) 15
+OUT (260) 16
+BACKGROUND (261) 2
+WORD (262) 13 15 16
+INVALID (263)
+
+
+Nonterminals, with rules where they appear
+
+$accept (10)
+    on left: 0
+command (11)
+    on left: 1 2, on right: 0
+pipeline (12)
+    on left: 4, on right: 1 2 5
+$@1 (13)
+    on left: 3, on right: 4
+pipeline2 (14)
+    on left: 5 6, on right: 4
+newlines (15)
+    on left: 7 8, on right: 5 7
+simple_command (16)
+    on left: 10, on right: 4
+$@2 (17)
+    on left: 9, on right: 10
+simple_command2 (18)
+    on left: 11 12, on right: 10 11
+cmd_element (19)
+    on left: 13 14, on right: 10 11
+redirection (20)
+    on left: 15 16, on right: 14
+
+
+State 0
+
+    0 $accept: . command $end
+
+    $default  reduce using rule 9 ($@2)
+
+    command         go to state 1
+    pipeline        go to state 2
+    simple_command  go to state 3
+    $@2             go to state 4
+
+
+State 1
+
+    0 $accept: command . $end
+
+    $end  shift, and go to state 5
+
+
+State 2
+
+    1 command: pipeline .
+    2        | pipeline . BACKGROUND
+
+    BACKGROUND  shift, and go to state 6
+
+    $default  reduce using rule 1 (command)
+
+
+State 3
+
+    4 pipeline: simple_command . $@1 pipeline2
+
+    $default  reduce using rule 3 ($@1)
+
+    $@1  go to state 7
+
+
+State 4
+
+   10 simple_command: $@2 . cmd_element simple_command2
+
+    IN    shift, and go to state 8
+    OUT   shift, and go to state 9
+    WORD  shift, and go to state 10
+
+    cmd_element  go to state 11
+    redirection  go to state 12
+
+
+State 5
+
+    0 $accept: command $end .
+
+    $default  accept
+
+
+State 6
+
+    2 command: pipeline BACKGROUND .
+
+    $default  reduce using rule 2 (command)
+
+
+State 7
+
+    4 pipeline: simple_command $@1 . pipeline2
+
+    PIPE  shift, and go to state 13
+
+    $default  reduce using rule 6 (pipeline2)
+
+    pipeline2  go to state 14
+
+
+State 8
+
+   15 redirection: IN . WORD
+
+    WORD  shift, and go to state 15
+
+
+State 9
+
+   16 redirection: OUT . WORD
+
+    WORD  shift, and go to state 16
+
+
+State 10
+
+   13 cmd_element: WORD .
+
+    $default  reduce using rule 13 (cmd_element)
+
+
+State 11
+
+   10 simple_command: $@2 cmd_element . simple_command2
+
+    IN    shift, and go to state 8
+    OUT   shift, and go to state 9
+    WORD  shift, and go to state 10
+
+    $default  reduce using rule 12 (simple_command2)
+
+    simple_command2  go to state 17
+    cmd_element      go to state 18
+    redirection      go to state 12
+
+
+State 12
+
+   14 cmd_element: redirection .
+
+    $default  reduce using rule 14 (cmd_element)
+
+
+State 13
+
+    5 pipeline2: PIPE . newlines pipeline
+
+    '\n'  shift, and go to state 19
+
+    $default  reduce using rule 8 (newlines)
+
+    newlines  go to state 20
+
+
+State 14
+
+    4 pipeline: simple_command $@1 pipeline2 .
+
+    $default  reduce using rule 4 (pipeline)
+
+
+State 15
+
+   15 redirection: IN WORD .
+
+    $default  reduce using rule 15 (redirection)
+
+
+State 16
+
+   16 redirection: OUT WORD .
+
+    $default  reduce using rule 16 (redirection)
+
+
+State 17
+
+   10 simple_command: $@2 cmd_element simple_command2 .
+
+    $default  reduce using rule 10 (simple_command)
+
+
+State 18
+
+   11 simple_command2: cmd_element . simple_command2
+
+    IN    shift, and go to state 8
+    OUT   shift, and go to state 9
+    WORD  shift, and go to state 10
+
+    $default  reduce using rule 12 (simple_command2)
+
+    simple_command2  go to state 21
+    cmd_element      go to state 18
+    redirection      go to state 12
+
+
+State 19
+
+    7 newlines: '\n' . newlines
+
+    '\n'  shift, and go to state 19
+
+    $default  reduce using rule 8 (newlines)
+
+    newlines  go to state 22
+
+
+State 20
+
+    5 pipeline2: PIPE newlines . pipeline
+
+    $default  reduce using rule 9 ($@2)
+
+    pipeline        go to state 23
+    simple_command  go to state 3
+    $@2             go to state 4
+
+
+State 21
+
+   11 simple_command2: cmd_element simple_command2 .
+
+    $default  reduce using rule 11 (simple_command2)
+
+
+State 22
+
+    7 newlines: '\n' newlines .
+
+    $default  reduce using rule 7 (newlines)
+
+
+State 23
+
+    5 pipeline2: PIPE newlines pipeline .
+
+    $default  reduce using rule 5 (pipeline2)

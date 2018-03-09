@@ -1,0 +1,30 @@
+%{
+	#include "parser.tab.h"
+	
+	#include <stdlib.h>
+%}
+
+letter   	[a-zA-Z]
+digit    	[0-9]
+symbol   	{letter}|{digit}|[!@#$%\.\-\_]
+
+%option yylineno
+
+%%
+
+
+"<"				{ return IN; }
+">"				{ return OUT; }
+"|"				{ return PIPE; }
+"&"				{ return BACKGROUND; }
+"\n" 			{ return EOF; }
+
+{symbol}+ { yylval.str = strdup (yytext); return WORD; }
+"\""({symbol}|" ")+"\"" { 
+	yylval.str = malloc ( strlen(yytext) - 2 );
+	int i; for (i=1; i<strlen(yytext)-1; ++i) yylval.str[i-1]=yytext[i];
+	return WORD;
+}
+
+" "				{ /* ignore white spaces */ }
+
