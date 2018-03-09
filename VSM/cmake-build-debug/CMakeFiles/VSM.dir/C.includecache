@@ -15,12 +15,6 @@ stdio.h
 -
 stdlib.h
 -
-errno.h
--
 sys/mman.h
--
-sys/wait.h
--
-string.h
 -
 
