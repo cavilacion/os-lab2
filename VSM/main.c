@@ -110,20 +110,20 @@ void removeChildFromActives(int childPID){
     }
 }
 
-int retrieveUpToDateListFromChild(){
+void retrieveUpToDateListFromChild(){
     safeRead(retrieve_from_child[READ], page, pagesize);
 }
 
-int sendUpToDateListToChild(){
+void sendUpToDateListToChild(){
     safeWrite(retrieve_from_parent[WRITE], page, pagesize);
 }
 
 /// CHILD METHODS
-int sendUpToDateListToParent(){
+void sendUpToDateListToParent(){
     safeWrite(retrieve_from_child[WRITE], page, pagesize);
 }
 
-int retrieveUpToDateListFromParent(){
+void retrieveUpToDateListFromParent(){
     sendSignal(parent, SIGUSR2);
     safeMProtect(page, pagesize, PROT_WRITE);
     safeRead(retrieve_from_parent[READ], page, pagesize);
