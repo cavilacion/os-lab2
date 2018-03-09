@@ -1,14 +1,88 @@
 %{
-	#include "parser.tab.h"
-	
-	#include <stdlib.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <errno.h>
+#include <unistd.h>
+#include <sys/wait.h>
+#include <fcntl.h>
+#include <string.h>
+
+#define MAX_PROC 256
+
+#define FAIL -1
+#define SUCCESS 0
+#define QUIT 1
+
+typedef enum Token { IN, OUT, PIPE, BACKGROUND, WORD, NEWLINE } Token;
+
+typedef struct pipeline {
+	char **args;
+	int argn;
+	char *fdinPath;
+	char *fdoutPath;
+}
+
+int fdpipe[2];
+char *word;
+
+void type_prompt () {
+	printf ("minishell > ");
+}
+
+void cleanup () {
+	close(fdpipe[0]);
+	close(fdpipe[1]);
+}
+
+void killchildren () {
+	return;
+}
+
+void changeInput (pipeline *p) {
+	p->fdinPath = strdup (word);
+	free (word);
+}
+
+int changeOutput (pipeline *p) {
+	p->fdoutPath = strdup (word);
+	free (word);
+}
+
+void addArg () {
+	argn++;
+	args = realloc (args,argn*sizeof(char*));
+	if (!args) {
+		printf ("memory reallocation failed.\n");
+		exit(EXIT_FAILURE);
+	}
+	args[argn-1]=strdup (word);
+	free (word);
+	printf ("added arg: %s\n", args[argn-1]);
+}
+
+void reset () {
+	for (int i=0; i<argn; i++) {
+		if (args[i]) free(args[i]);
+	}
+	args = realloc (args, 0);
+	if (fdinPath) free (fdinPath);
+	fdinPath = NULL;
+	if (fdoutPath) free (fdoutPath);
+	fdoutPath = NULL;
+	argn=0;
+}
+
+void exit_shell () {
+	cleanup ();
+	killchildren (); // sadistic name
+	printf ("thank you for using minishell!\n");
+}
 %}
 
 letter   	[a-zA-Z]
 digit    	[0-9]
-symbol   	{letter}|{digit}|[!@#$%\.\-\_]
+symbol   	{letter}|{digit}|[!@#\$\%\.\-\_]
 
-%option yylineno
 
 %%
 
@@ -17,14 +91,112 @@ symbol   	{letter}|{digit}|[!@#$%\.\-\_]
 ">"				{ return OUT; }
 "|"				{ return PIPE; }
 "&"				{ return BACKGROUND; }
-"\n" 			{ return EOF; }
+"\n"			{ return NEWLINE; }
 
-{symbol}+ { yylval.str = strdup (yytext); return WORD; }
+{symbol}+ { word = strdup (yytext); return WORD; }
 "\""({symbol}|" ")+"\"" { 
-	yylval.str = malloc ( strlen(yytext) - 2 );
-	int i; for (i=1; i<strlen(yytext)-1; ++i) yylval.str[i-1]=yytext[i];
+	word = malloc ( strlen(yytext) - 2 );
+	int i; for (i=1; i<strlen(yytext)-1; ++i) word[i-1]=yytext[i];
 	return WORD;
 }
 
 " "				{ /* ignore white spaces */ }
+
+
+%%
+
+int main (int argc, char *argv[]) {
+	int pid;
+	pipeline p;
+	do {
+		int status, background=0, pipe=0;
+		type_prompt();
+		Token tok=yylex();
+		while (tok != NEWLINE) {
+			switch (tok) {
+				case IN:
+					tok = yylex();
+					if (tok!=WORD) {
+						printf ("error: expected file descriptor for in\n");
+						exit_shell();
+					}
+					changeInput (&p);
+					tok = yylex();
+					break;
+				case OUT:
+					tok = yylex();
+					if (tok!=WORD) {
+						printf ("error: expected file descriptor for out\n");
+						exit_shell();
+					}
+					changeOutput ();
+					tok = yylex();
+					break;
+				case PIPE: 
+					break;
+				case BACKGROUND:
+					background = 1;
+					tok = yylex();
+					if ( tok != NEWLINE ) {
+						printf ("error: token \`&\' should be at end of line\n");
+						exit_shell();
+					}
+					break;
+				case WORD:
+					addArg();
+					tok = yylex();
+					break;
+			}
+		}
+		int stat;
+		pid=fork ();
+		if (pid!=0) { // parent
+			printf ("parent says hi\n");
+			if (!background) {
+				waitpid(pid, &stat, 0);
+			}
+			reset();
+		}
+		else { // child
+			printf ("child says hi\n");
+			if (argn==0) { // empty command
+				return 0;
+			}
+			int fdin, fdout;
+			if (fdoutPath) {
+				printf ("changing stdout\n");
+				fdout=open(fdoutPath,O_RDWR);
+				if (fdout==-1) {
+					printf ("error opening out: %s\n", fdoutPath);
+					exit_shell();
+				}
+				close (1);
+				dup(fdout);
+				close (fdout);
+			}
+			if (fdinPath) {
+				printf ("chaning stdin\n");
+				fdin=open(fdinPath,O_RDONLY);
+				if (fdin==-1) {
+					printf ("error opening in: %s\n", fdinPath);
+					return FAIL;
+				}
+				close (0);
+				dup(fdin);
+				close (fdin);
+			}
+			printf ("executing %s ", args[0]);
+			for (int i=1; i < argn; i++) printf ("%s ", args[i]);
+			printf ("\n");
+			int result = execvp(args[0], args);
+			if (result == -1) {
+				printf ("command execution of %s returned error (errno=%d)\n", args[0], errno);
+				return -1;
+			}
+			return 0;
+		}
+	} while (pid != 0); // only parent continues
+	printf ("if here, quit\n");
+	return 0;
+}
 

@@ -174,27 +174,8 @@ extern FILE *yyin, *yyout;
 #define EOB_ACT_END_OF_FILE 1
 #define EOB_ACT_LAST_MATCH 2
 
-    /* Note: We specifically omit the test for yy_rule_can_match_eol because it requires
-     *       access to the local variable yy_act. Since yyless() is a macro, it would break
-     *       existing scanners that call yyless() from OUTSIDE yylex. 
-     *       One obvious solution it to make yy_act a global. I tried that, and saw
-     *       a 5% performance hit in a non-yylineno scanner, because yy_act is
-     *       normally declared as a register variable-- so it is not worth it.
-     */
-    #define  YY_LESS_LINENO(n) \
-            do { \
-                int yyl;\
-                for ( yyl = n; yyl < yyleng; ++yyl )\
-                    if ( yytext[yyl] == '\n' )\
-                        --yylineno;\
-            }while(0)
-    #define YY_LINENO_REWIND_TO(dst) \
-            do {\
-                const char *p;\
-                for ( p = yy_cp-1; p >= (dst); --p)\
-                    if ( *p == '\n' )\
-                        --yylineno;\
-            }while(0)
+    #define YY_LESS_LINENO(n)
+    #define YY_LINENO_REWIND_TO(ptr)
     
 /* Return all but the first "n" matched characters back to the input stream. */
 #define yyless(n) \
@@ -358,6 +339,8 @@ void yyfree (void *  );
 
 #define YY_AT_BOL() (YY_CURRENT_BUFFER_LVALUE->yy_at_bol)
 
+/* Begin user sect3 */
+
 typedef unsigned char YY_CHAR;
 
 FILE *yyin = (FILE *) 0, *yyout = (FILE *) 0;
@@ -473,11 +456,6 @@ static yyconst flex_int16_t yy_chk[39] =
        16,   16,   16,   16,   16,   16,   16,   16
     } ;
 
-/* Table of booleans, true if rule could match eol. */
-static yyconst flex_int32_t yy_rule_can_match_eol[10] =
-    {   0,
-0, 0, 0, 0, 1, 0, 0, 0, 0,     };
-
 static yy_state_type yy_last_accepting_state;
 static char *yy_last_accepting_cpos;
 
@@ -494,10 +472,82 @@ int yy_flex_debug = 0;
 char *yytext;
 #line 1 "scanner.fl"
 #line 2 "scanner.fl"
-	#include "parser.tab.h"
-	
-	#include <stdlib.h>
-#line 501 "lex.yy.c"
+#include <stdio.h>
+#include <stdlib.h>
+#include <errno.h>
+#include <unistd.h>
+#include <sys/wait.h>
+#include <fcntl.h>
+#include <string.h>
+
+#define MAX_PROC 256
+
+#define FAIL -1
+#define SUCCESS 0
+#define QUIT 1
+
+typedef enum Token { IN, OUT, PIPE, BACKGROUND, WORD, NEWLINE } Token;
+
+char **args;
+int argn;
+char *fdinPath;
+char *fdoutPath;
+int fdpipe[2];
+char *word;
+
+void type_prompt () {
+	printf ("minishell > ");
+}
+
+void cleanup () {
+	close(fdpipe[0]);
+	close(fdpipe[1]);
+}
+
+void killchildren () {
+	return;
+}
+
+void changeInput () {
+	fdinPath = strdup (word);
+	free (word);
+}
+
+int changeOutput () {
+	fdoutPath = strdup (word);
+	free (word);
+}
+
+void addArg () {
+	argn++;
+	args = realloc (args,argn*sizeof(char*));
+	if (!args) {
+		printf ("memory reallocation failed.\n");
+		exit(EXIT_FAILURE);
+	}
+	args[argn-1]=strdup (word);
+	free (word);
+	printf ("added arg: %s\n", args[argn-1]);
+}
+
+void reset () {
+	for (int i=0; i<argn; i++) {
+		if (args[i]) free(args[i]);
+	}
+	args = realloc (args, 0);
+	if (fdinPath) free (fdinPath);
+	fdinPath = NULL;
+	if (fdoutPath) free (fdoutPath);
+	fdoutPath = NULL;
+	argn=0;
+}
+
+void exit_shell () {
+	cleanup ();
+	killchildren (); // sadistic name
+	printf ("thank you for using minishell!\n");
+}
+#line 551 "lex.yy.c"
 
 #define INITIAL 0
 
@@ -715,11 +765,11 @@ YY_DECL
 		}
 
 	{
-#line 13 "scanner.fl"
+#line 84 "scanner.fl"
 
 
 
-#line 723 "lex.yy.c"
+#line 773 "lex.yy.c"
 
 	while ( /*CONSTCOND*/1 )		/* loops until end-of-file is reached */
 		{
@@ -765,16 +815,6 @@ yy_find_action:
 
 		YY_DO_BEFORE_ACTION;
 
-		if ( yy_act != YY_END_OF_BUFFER && yy_rule_can_match_eol[yy_act] )
-			{
-			yy_size_t yyl;
-			for ( yyl = 0; yyl < yyleng; ++yyl )
-				if ( yytext[yyl] == '\n' )
-					   
-    yylineno++;
-;
-			}
-
 do_action:	/* This label is used only to access EOF actions. */
 
 		switch ( yy_act )
@@ -788,55 +828,55 @@ do_action:	/* This label is used only to access EOF actions. */
 
 case 1:
 YY_RULE_SETUP
-#line 16 "scanner.fl"
+#line 87 "scanner.fl"
 { return IN; }
 	YY_BREAK
 case 2:
 YY_RULE_SETUP
-#line 17 "scanner.fl"
+#line 88 "scanner.fl"
 { return OUT; }
 	YY_BREAK
 case 3:
 YY_RULE_SETUP
-#line 18 "scanner.fl"
+#line 89 "scanner.fl"
 { return PIPE; }
 	YY_BREAK
 case 4:
 YY_RULE_SETUP
-#line 19 "scanner.fl"
+#line 90 "scanner.fl"
 { return BACKGROUND; }
 	YY_BREAK
 case 5:
 /* rule 5 can match eol */
 YY_RULE_SETUP
-#line 20 "scanner.fl"
-{ return EOF; }
+#line 91 "scanner.fl"
+{ return NEWLINE; }
 	YY_BREAK
 case 6:
 YY_RULE_SETUP
-#line 22 "scanner.fl"
-{ yylval.str = strdup (yytext); return WORD; }
+#line 93 "scanner.fl"
+{ word = strdup (yytext); return WORD; }
 	YY_BREAK
 case 7:
 YY_RULE_SETUP
-#line 23 "scanner.fl"
+#line 94 "scanner.fl"
 { 
-	yylval.str = malloc ( strlen(yytext) - 2 );
-	int i; for (i=1; i<strlen(yytext)-1; ++i) yylval.str[i-1]=yytext[i];
+	word = malloc ( strlen(yytext) - 2 );
+	int i; for (i=1; i<strlen(yytext)-1; ++i) word[i-1]=yytext[i];
 	return WORD;
 }
 	YY_BREAK
 case 8:
 YY_RULE_SETUP
-#line 29 "scanner.fl"
+#line 100 "scanner.fl"
 { /* ignore white spaces */ }
 	YY_BREAK
 case 9:
 YY_RULE_SETUP
-#line 31 "scanner.fl"
+#line 103 "scanner.fl"
 ECHO;
 	YY_BREAK
-#line 840 "lex.yy.c"
+#line 880 "lex.yy.c"
 case YY_STATE_EOF(INITIAL):
 	yyterminate();
 
@@ -1200,10 +1240,6 @@ static int yy_get_next_buffer (void)
 
 	*--yy_cp = (char) c;
 
-    if ( c == '\n' ){
-        --yylineno;
-    }
-
 	(yytext_ptr) = yy_bp;
 	(yy_hold_char) = *yy_cp;
 	(yy_c_buf_p) = yy_cp;
@@ -1280,11 +1316,6 @@ static int yy_get_next_buffer (void)
 	c = *(unsigned char *) (yy_c_buf_p);	/* cast for 8-bit char's */
 	*(yy_c_buf_p) = '\0';	/* preserve yytext */
 	(yy_hold_char) = *++(yy_c_buf_p);
-
-	if ( c == '\n' )
-		   
-    yylineno++;
-;
 
 	return c;
 }
@@ -1752,9 +1783,6 @@ static int yy_init_globals (void)
      * This function is called from yylex_destroy(), so don't allocate here.
      */
 
-    /* We do not touch yylineno unless the option is enabled. */
-    yylineno =  1;
-    
     (yy_buffer_stack) = 0;
     (yy_buffer_stack_top) = 0;
     (yy_buffer_stack_max) = 0;
@@ -1849,4 +1877,102 @@ void yyfree (void * ptr )
 
 #define YYTABLES_NAME "yytables"
 
-#line 31 "scanner.fl"
+#line 103 "scanner.fl"
+
+
+
+int main (int argc, char *argv[]) {
+	int pid;
+	do {
+		int status, background=0, pipe=0;
+		type_prompt();
+		Token tok=yylex();
+		while (tok != NEWLINE) {
+			switch (tok) {
+				case IN:
+					tok = yylex();
+					if (tok!=WORD) {
+						printf ("error: expected file descriptor for in\n");
+						exit_shell();
+					}
+					changeInput ();
+					tok = yylex();
+					break;
+				case OUT:
+					tok = yylex();
+					if (tok!=WORD) {
+						printf ("error: expected file descriptor for out\n");
+						exit_shell();
+					}
+					changeOutput ();
+					tok = yylex();
+					break;
+				case PIPE: 
+					break;
+				case BACKGROUND:
+					background = 1;
+					tok = yylex();
+					if ( tok != NEWLINE ) {
+						printf ("error: token \`&\' should be at end of line\n");
+						exit_shell();
+					}
+					break;
+				case WORD:
+					addArg();
+					tok = yylex();
+					break;
+			}
+		}
+		int stat;
+		pid=fork ();
+		if (pid!=0) { // parent
+			printf ("parent says hi\n");
+			if (!background) {
+				waitpid(pid, &stat, 0);
+			}
+			reset();
+		}
+		else { // child
+			printf ("child says hi\n");
+			if (argn==0) { // empty command
+				return 0;
+			}
+			int fdin, fdout;
+			if (fdoutPath) {
+				printf ("changing stdout\n");
+				fdout=open(fdoutPath,O_RDWR);
+				if (fdout==-1) {
+					printf ("error opening out: %s\n", fdoutPath);
+					exit_shell();
+				}
+				close (1);
+				dup(fdout);
+				close (fdout);
+			}
+			if (fdinPath) {
+				printf ("chaning stdin\n");
+				fdin=open(fdinPath,O_RDONLY);
+				if (fdin==-1) {
+					printf ("error opening in: %s\n", fdinPath);
+					return FAIL;
+				}
+				close (0);
+				dup(fdin);
+				close (fdin);
+			}
+			printf ("executing %s ", args[0]);
+			for (int i=1; i < argn; i++) printf ("%s ", args[i]);
+			printf ("\n");
+			int result = execvp(args[0], args);
+			if (result == -1) {
+				printf ("command execution of %s returned error (errno=%d)\n", argv[0], errno);
+				return -1;
+			}
+			return 0;
+		}
+	} while (pid != 0); // only parent continues
+	printf ("if here, quit\n");
+	return 0;
+}
+
+
