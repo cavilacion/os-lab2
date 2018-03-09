@@ -49,8 +49,7 @@ extern int yydebug;
     IN = 259,
     OUT = 260,
     BACKGROUND = 261,
-    WORD = 262,
-    INVALID = 263
+    WORD = 262
   };
 #endif
 
@@ -59,11 +58,13 @@ extern int yydebug;
 
 union YYSTYPE
 {
-#line 49 "parser.y" /* yacc.c:1909  */
+#line 157 "parser.y" /* yacc.c:1909  */
 
   char *str;
+  char **argv;
+  int exit_status;
 
-#line 67 "parser.tab.h" /* yacc.c:1909  */
+#line 68 "parser.tab.h" /* yacc.c:1909  */
 };
 
 typedef union YYSTYPE YYSTYPE;

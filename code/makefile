@@ -1,15 +1,11 @@
 CC=gcc
-CFLAGS=-O2 -Wall
-all: scanner parser
-	${CC} -o a.out ${CFLAGS} parser.tab.c -ll -lm -lfl
+CFLAGS=-Wall -std=c99
+all: scanner
+	${CC} -o a.out ${CFLAGS} lex.yy.c -lfl
 
 scanner: scanner.fl
 	flex scanner.fl
-parser: parser.y
-	bison -d -v parser.y
 clean:
-	rm -f parser.tab.c
-	rm -f parser.tab.h
 	rm -f lex.yy.c
 	rm -f *.o
 	rm -f *~
