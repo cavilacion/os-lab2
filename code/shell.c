@@ -1,222 +1,246 @@
-%{
-#include <stdio.h>
-#include <stdlib.h>
-#include <errno.h>
-#include <unistd.h>
-#include <sys/wait.h>
-#include <fcntl.h>
-#include "parser.tab.h"
-#include "lex.yy.c"
+#include "shell.h"
 
-#define MAX_PROC 256
+extern char *word_buff;
 
-#define FAIL -1
-#define SUCCESS 0
-#define QUIT 1
-
-typedef struct processData {
-	int pid;
-	char **argv;
-	int argc;
-	char *fdinPath;
-	char *fdoutPath;
-} processData;
-
-typedef struct processData* process;
-
-process *ptab;
-int numProc=0;
-int fdpipe[2];
-
-int yyerror() {
-  printf("wrong syntax\n");
-  exit(EXIT_SUCCESS);
+/* "safe" memory allocation and reallocation */
+void *safeRealloc (void *ptr, int new_size) {
+	ptr = realloc (ptr, new_size);
+	if (!ptr) {
+		printf ("fatal error: memory reallocation failed\n");
+		return NULL;
+	}
+	return ptr;
+}
+void *safeMalloc (int size) {
+	void *ptr = malloc (size);
+	if (!ptr) {
+		printf ("fatal error: memory allocation failed\n");
+		return NULL;
+	}
+	return ptr;
 }
 
-void type_prompt () {
-	printf ("minishell > ");
+/* strdup does not appear to be ISO C */
+char *strdup (const char *str) {
+	char *dup=safeMalloc (strlen(str)+1);
+	int i;
+	if (dup) for (i=0; i<strlen(str); ++i) {
+		dup[i]=str[i];
+	}
+	if (dup) dup[i]='\0';
+	return dup;
 }
 
-process newProcess () {
-	process p=malloc (sizeof(processData));
-	p->argc = 0;
-	p->argv=NULL;
+int initPipeline (pipeline *p) {
+	p->argc=0;
+	p->maxArg=64;
+	p->argv=safeMalloc (p->maxArg*sizeof(char*));
+	if (p->argv==NULL) return -1;
 	p->fdinPath=NULL;
 	p->fdoutPath=NULL;
-	return p;
+	return 0;
 }
 
-
-void freeProcess (int i) {
-	process p = ptab[i];
+int resizePipeline (pipeline *p) {
+	p->maxArg *= 2;
+	p->argv=safeRealloc (p->argv, p->maxArg*sizeof(char*));
+	if (p->argv==NULL) return -1;
+	return 0;
+}
+	
+void destroyPipeline (pipeline *p) {
 	for (int i=0; i<p->argc; i++) {
 		free (p->argv[i]);
 	}
-	if (p->argv) 
-		free (p->argv);
-	if (p->fdinPath)
-		free (p->fdinPath);
-	if (p->fdoutPath) 
-		free (p->fdoutPath);
+	free (p->argv);
+	if (p->fdinPath!=NULL) free (p->fdinPath);
+	if (p->fdoutPath!=NULL) free (p->fdoutPath);
 }
 
-void initProcTable () {
-	ptab = malloc (MAX_PROC*sizeof(process));
-	if (!ptab) {
-		printf ("memory allocation failed.\n");
-		exit(EXIT_FAILURE);
+int initCommand (command *c) {
+	c->maxPipes = 64;
+	c->pl = safeMalloc (c->maxPipes*sizeof(pipeline));
+	if (c->pl==NULL) return -1;
+	c->fd = safeMalloc (2*c->maxPipes*sizeof(int));
+	if (c->fd==NULL) return -1;
+	c->numPipes = 0;
+	c->bg = 0;
+	int r = initPipeline (&(c->pl[0]));
+	return r;
+}
+
+int resizeCommand (command *c) {
+	c->maxPipes *= 2;
+	c->pl = safeRealloc (c->pl, c->maxPipes*sizeof(pipeline));
+	if (c->pl==NULL) return -1;
+	c->fd = safeRealloc (c->fd, 2*c->maxPipes*sizeof(int));
+	return 0;
+}
+
+void destroyCommand (command *c) {
+	for (int i=0; i<=c->numPipes; i++) {
+		destroyPipeline (&(c->pl[i]));
 	}
-	for (int i=0; i<MAX_PROC; i++) {
-		ptab[i]=newProcess();
+	free (c->fd);
+	free (c->pl);
+}
+
+int initProcTable (procTable *pt) {
+	pt->maxProcs = 64;
+	pt->pid = safeMalloc (64*sizeof(int));
+	if (pt->pid == NULL) return -1;
+	pt->numProcs = 0;
+	return 0;
+}
+
+int resizeProcTable (procTable *pt) {
+	pt->maxProcs *= 2;
+	pt->pid = safeRealloc (pt->pid, pt->maxProcs*sizeof(int));
+	if (pt->pid == NULL) return -1;
+	return 0;
+}
+void destroyProcTable (procTable *pt) {
+	free (pt->pid);
+}
+
+void type_prompt () {
+	printf ("minishell$ ");
+}
+
+/* this function kills children (omg) and cleans up command and proctable
+ */
+void cleanup (command *cmd, procTable *pt) {
+	if (pt!=NULL) {
+		int n = pt->numProcs;
+		for (int i=0; i<n; i++) {
+			kill (pt->pid[i], SIGTERM);
+		}
+		destroyProcTable (pt);
+	}
+	if (cmd!=NULL) {
+		destroyCommand (cmd);
 	}
 }
 
-void cleanup () {
-	close(fdpipe[0]);
-	close(fdpipe[1]);
+/* function copies word buffer to pipeline as fdinPath */
+int changeInput (pipeline *p) {
+	if (p->fdinPath!=NULL) free (p->fdinPath);
+	p->fdinPath = strdup (word_buff);
+	if (!p->fdinPath) return -1;
+	free (word_buff);
+	return 0;
 }
 
-void killchildren () {
-	return;
+/* function copies word buffer to pipeline as fdoutPath */
+int changeOutput (pipeline *p) {
+	if (p->fdoutPath !=NULL) free (p->fdoutPath);
+	p->fdoutPath = strdup (word_buff);
+	if (!p->fdoutPath) return -1;
+	free (word_buff);
+	return 0;
 }
 
-void changeInput () {
-	ptab[numProc]->fdinPath = strdup (yylval.str);
-}
-
-int changeOutput () {
-	ptab[numProc]->fdoutPath = strdup (yylval.str);
-}
-
-void addArg () {
-	process p = ptab[numProc];
+/* function adds word buffer to pipeline as an argument */
+int addArg (pipeline *p) {
 	p->argc++;
-	p->argv = realloc (p->argv,p->argc*sizeof(char*));
-	if (!p->argv) {
-		printf ("memory allocation failed.\n");
-		exit(EXIT_FAILURE);
+	if (p->argc == p->maxArg) {
+		p->maxArg *= 2;
+		p->argv = safeRealloc (p->argv,p->argc*sizeof(char*));
+		if (!p->argv) return -1;
 	}
-	p->argv[p->argc-1]=strdup (yylval.str);
-	printf ("added arg: %s\n", p->argv[p->argc-1]);
+	
+	p->argv[p->argc-1]=strdup (word_buff);
+	if (!p->argv[p->argc-1]) return -1;
+	p->argv[p->argc]='\0';
+	
+	free (word_buff);
+	return 0;
 }
 
-int run () {
-	process p = ptab[numProc];
-	if (p->argc == 0) {
-		printf ("empty command\n");
-		return SUCCESS;
+int executeCmd (command *cmd, procTable *pt) {
+	int stat, pid;
+	int n = cmd->numPipes;
+	int bg = cmd->bg;
+	int *fd = cmd->fd;
+	/* initialize pipes */
+	for (int i=0; i < n; i++) {
+		if (pipe (&fd[2*i]) == -1) {
+			printf ("pipe error\n");
+			return -1;
+		}
 	}
-	if (strcmp (p->argv[0], "exit")==0) {
-		printf ("exiting.");
-		return QUIT;
-	}
-	int pid, stat;
-	pid=fork ();
-	if (pid!=0) { // parent
-		waitpid (-1, &stat, 0);
-		printf ("child exited with status %d\n", stat);
-		return SUCCESS;
-	}
-	else { // child
-		int fdin, fdout;
-		if (p->fdoutPath) {
-			fdout=open(p->fdoutPath,O_CREAT);
-			if (fdout==-1) {
-				printf ("error opening out: %s\n", p->fdoutPath);
-				return FAIL;
+	
+	for (int i=0; i<=n; i++) {
+		
+		pid=fork();
+		
+		/* parent */
+		if (pid!=0) { 
+			if (!bg) {
+				waitpid (pid, &stat, 0);
+				if (n > 0 && i < n) {
+					close (fd[2*i+1]);
+				}
+				if (i > 0) {
+					close (fd[2*i-2]);
+				}
 			}
-			dup2(fdout,1);
-		}
-		if (p->fdinPath) {
-			fdin=open(p->fdinPath,O_RDONLY);
-			if (fdin==-1) {
-				printf ("error opening in: %s\n", p->fdinPath);
-				return FAIL;
+			else { // save process in table
+				pt->pid[pt->numProcs++] = pid;
+				if (pt->numProcs >= pt->maxProcs) {
+					if (resizeProcTable (pt) == -1) {
+						return -1;
+					}
+				}
 			}
-			dup2(fdin,0);
 		}
-		printf ("executing command:");
-		for (int i=0; i<p->argc; i++) {
-			printf (" %s", p->argv[i]);
+		
+		/* child */
+		else {
+			pipeline p = cmd->pl[i];
+			if (i > 0) { // input from pipe
+				close (0);
+				dup (fd[2*i-2]);
+				close (fd[2*i-2]);
+			}
+			else if (p.fdinPath != NULL) { // input from file
+				int fdin = open (p.fdinPath, O_RDONLY);
+				if (fdin == -1) {
+					printf ("unable to find %s for input\n", p.fdinPath);
+					return -1;
+				}
+				close (0);
+				dup(fdin);
+				close (fdin);
+			}
+			if (n > 0 && i < n) { // output to pipe
+				close (1);
+				dup (fd[2*i+1]);
+				close (fd[2*i+1]);
+			}
+			else if (p.fdoutPath != NULL) { // output to file
+				int fdout = open (p.fdoutPath, O_RDWR);
+				if (fdout == -1) {
+					printf ("unable to find %s for output\n", p.fdoutPath);
+					return -1;
+				}
+				close (1);
+				dup (fdout);
+				close (fdout);
+			}
+			stat = execvp (p.argv[0], p.argv);
+			if (stat == -1) {
+				printf ("unable to execute command %s\n", p.argv[0]);
+			}
+			return -1;
 		}
-		printf ("\n");
-		execvp (p->argv[0], p->argv);
-		return SUCCESS;
+		
 	}
-}
-
-
-void exit_shell () {
-	cleanup ();
-	killchildren (); // sadistic name
-	printf ("thank you for using minishell!\n");
-}
-
-%}
-
-%union {
-  char *str;
-  int argc;
-  int exit_status;
-}
-
-%start command
-%locations
-
-%token PIPE IN OUT BACKGROUND WORD
-
-%type<exit_status> command pipeline pipeline2 simple_command
-%%
-
-command : { return SUCCESS; } // empty command
-				| pipeline { return $1; }
-				| pipeline BACKGROUND
-				;
-
-pipeline : simple_command pipeline2 { if($2==FAIL) $$ = FAIL;
-																			if($2==SUCCESS) $$ = $1;
-																			if($2==QUIT) $$ = QUIT; } 
-				 ;
-
-pipeline2 : PIPE newlines pipeline2 { $$ = $3; }
-					| /* eps */ { $$ = SUCCESS; }
-					;
-
-newlines : '\n' newlines
-				 | /* eps */
-				 ;
-
-simple_command : cmd_element simple_command2 { $$ = run(); numProc++; }
-							 ;
-
-simple_command2 : cmd_element simple_command2
-								| /* eps */
-								;
-
-cmd_element : WORD				{ addArg(); }
-						| redirection
-						;
-
-redirection : IN WORD { changeInput (); }		
-						| OUT WORD { changeOutput (); }
-						;
-
-
-
-%%
-
-int main (int argc, char *argv[]) {
-	initProcTable ();
-	while (1) {
-		type_prompt();
-		int status=yyparse();
-		switch (status) {
-			case FAIL: /* continue */ break;
-			case SUCCESS: /* continue */ break;
-			case QUIT: exit_shell(); break;
-		}
-		if (status==QUIT) break;
+	
+	/* parent closes pipes */
+	for (int i=0; i < 2*n; i++) {
+		close (fd[2*i]);
 	}
-	printf ("if here, quit\n");
+	
 	return 0;
 }

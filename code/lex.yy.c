@@ -375,8 +375,8 @@ static void yy_fatal_error (yyconst char msg[]  );
 	*yy_cp = '\0'; \
 	(yy_c_buf_p) = yy_cp;
 
-#define YY_NUM_RULES 9
-#define YY_END_OF_BUFFER 10
+#define YY_NUM_RULES 10
+#define YY_END_OF_BUFFER 11
 /* This struct is not used in this scanner,
    but its presence is necessary. */
 struct yy_trans_info
@@ -386,7 +386,7 @@ struct yy_trans_info
 	};
 static yyconst flex_int16_t yy_accept[17] =
     {   0,
-        0,    0,   10,    9,    5,    8,    6,    9,    4,    1,
+        0,    0,   11,    9,    5,    8,    6,    9,    4,    1,
         2,    3,    6,    0,    7,    0
     } ;
 
@@ -398,10 +398,10 @@ static yyconst YY_CHAR yy_ec[256] =
         1,    3,    4,    5,    4,    4,    4,    6,    1,    1,
         1,    1,    1,    1,    4,    4,    1,    7,    7,    7,
         7,    7,    7,    7,    7,    7,    7,    1,    1,    8,
-        1,    9,    1,    4,   10,   10,   10,   10,   10,   10,
+        1,    9,    4,    4,   10,   10,   10,   10,   10,   10,
        10,   10,   10,   10,   10,   10,   10,   10,   10,   10,
        10,   10,   10,   10,   10,   10,   10,   10,   10,   10,
-        1,    1,    1,    1,    4,    1,   10,   10,   10,   10,
+        1,    4,    1,    1,    4,    1,   10,   10,   10,   10,
 
        10,   10,   10,   10,   10,   10,   10,   10,   10,   10,
        10,   10,   10,   10,   10,   10,   10,   10,   10,   10,
@@ -472,82 +472,11 @@ int yy_flex_debug = 0;
 char *yytext;
 #line 1 "scanner.fl"
 #line 2 "scanner.fl"
-#include <stdio.h>
-#include <stdlib.h>
-#include <errno.h>
-#include <unistd.h>
-#include <sys/wait.h>
-#include <fcntl.h>
-#include <string.h>
+#include "shell.h"
 
-#define MAX_PROC 256
+char *word_buff; /* global buffer (very sorry) */
 
-#define FAIL -1
-#define SUCCESS 0
-#define QUIT 1
-
-typedef enum Token { IN, OUT, PIPE, BACKGROUND, WORD, NEWLINE } Token;
-
-char **args;
-int argn;
-char *fdinPath;
-char *fdoutPath;
-int fdpipe[2];
-char *word;
-
-void type_prompt () {
-	printf ("minishell > ");
-}
-
-void cleanup () {
-	close(fdpipe[0]);
-	close(fdpipe[1]);
-}
-
-void killchildren () {
-	return;
-}
-
-void changeInput () {
-	fdinPath = strdup (word);
-	free (word);
-}
-
-int changeOutput () {
-	fdoutPath = strdup (word);
-	free (word);
-}
-
-void addArg () {
-	argn++;
-	args = realloc (args,argn*sizeof(char*));
-	if (!args) {
-		printf ("memory reallocation failed.\n");
-		exit(EXIT_FAILURE);
-	}
-	args[argn-1]=strdup (word);
-	free (word);
-	printf ("added arg: %s\n", args[argn-1]);
-}
-
-void reset () {
-	for (int i=0; i<argn; i++) {
-		if (args[i]) free(args[i]);
-	}
-	args = realloc (args, 0);
-	if (fdinPath) free (fdinPath);
-	fdinPath = NULL;
-	if (fdoutPath) free (fdoutPath);
-	fdoutPath = NULL;
-	argn=0;
-}
-
-void exit_shell () {
-	cleanup ();
-	killchildren (); // sadistic name
-	printf ("thank you for using minishell!\n");
-}
-#line 551 "lex.yy.c"
+#line 480 "lex.yy.c"
 
 #define INITIAL 0
 
@@ -765,11 +694,11 @@ YY_DECL
 		}
 
 	{
-#line 84 "scanner.fl"
+#line 13 "scanner.fl"
 
 
 
-#line 773 "lex.yy.c"
+#line 702 "lex.yy.c"
 
 	while ( /*CONSTCOND*/1 )		/* loops until end-of-file is reached */
 		{
@@ -828,55 +757,61 @@ do_action:	/* This label is used only to access EOF actions. */
 
 case 1:
 YY_RULE_SETUP
-#line 87 "scanner.fl"
+#line 16 "scanner.fl"
 { return IN; }
 	YY_BREAK
 case 2:
 YY_RULE_SETUP
-#line 88 "scanner.fl"
+#line 17 "scanner.fl"
 { return OUT; }
 	YY_BREAK
 case 3:
 YY_RULE_SETUP
-#line 89 "scanner.fl"
+#line 18 "scanner.fl"
 { return PIPE; }
 	YY_BREAK
 case 4:
 YY_RULE_SETUP
-#line 90 "scanner.fl"
+#line 19 "scanner.fl"
 { return BACKGROUND; }
 	YY_BREAK
 case 5:
 /* rule 5 can match eol */
 YY_RULE_SETUP
-#line 91 "scanner.fl"
+#line 20 "scanner.fl"
 { return NEWLINE; }
 	YY_BREAK
 case 6:
 YY_RULE_SETUP
-#line 93 "scanner.fl"
-{ word = strdup (yytext); return WORD; }
+#line 22 "scanner.fl"
+{ word_buff = strdup (yytext); return WORD; }
 	YY_BREAK
 case 7:
 YY_RULE_SETUP
-#line 94 "scanner.fl"
-{ 
-	word = malloc ( strlen(yytext) - 2 );
-	int i; for (i=1; i<strlen(yytext)-1; ++i) word[i-1]=yytext[i];
-	return WORD;
+#line 24 "scanner.fl"
+{ /* word surrounded by quotes */
+										word_buff = malloc ( strlen(yytext) - 1 );
+										int i; for (i=1; i<strlen(yytext)-1; ++i) word_buff[i-1]=yytext[i];
+										word_buff[i-1]='\0';
+										return WORD;
 }
 	YY_BREAK
 case 8:
 YY_RULE_SETUP
-#line 100 "scanner.fl"
+#line 31 "scanner.fl"
 { /* ignore white spaces */ }
 	YY_BREAK
 case 9:
 YY_RULE_SETUP
-#line 103 "scanner.fl"
+#line 32 "scanner.fl"
+{ return INVALID; }
+	YY_BREAK
+case 10:
+YY_RULE_SETUP
+#line 35 "scanner.fl"
 ECHO;
 	YY_BREAK
-#line 880 "lex.yy.c"
+#line 815 "lex.yy.c"
 case YY_STATE_EOF(INITIAL):
 	yyterminate();
 
@@ -1877,101 +1812,66 @@ void yyfree (void * ptr )
 
 #define YYTABLES_NAME "yytables"
 
-#line 103 "scanner.fl"
+#line 35 "scanner.fl"
 
 
 
 int main (int argc, char *argv[]) {
-	int pid;
-	do {
-		int status, background=0, pipe=0;
-		type_prompt();
-		Token tok=yylex();
-		while (tok != NEWLINE) {
-			switch (tok) {
-				case IN:
-					tok = yylex();
-					if (tok!=WORD) {
-						printf ("error: expected file descriptor for in\n");
-						exit_shell();
-					}
-					changeInput ();
-					tok = yylex();
-					break;
-				case OUT:
-					tok = yylex();
-					if (tok!=WORD) {
-						printf ("error: expected file descriptor for out\n");
-						exit_shell();
-					}
-					changeOutput ();
-					tok = yylex();
-					break;
-				case PIPE: 
-					break;
-				case BACKGROUND:
-					background = 1;
-					tok = yylex();
-					if ( tok != NEWLINE ) {
-						printf ("error: token \`&\' should be at end of line\n");
-						exit_shell();
-					}
-					break;
-				case WORD:
-					addArg();
-					tok = yylex();
-					break;
-			}
+	printf ("Welcome to minishell! Type exit to quit.\n\n");
+	
+	/* initialization of proctable and command */
+	
+	int status;
+	
+	procTable *pt=safeMalloc (sizeof(procTable));
+	if (pt==NULL) return -1;
+	command *cmd=safeMalloc (sizeof(command));
+	if (pt==NULL) {
+		free (pt);
+		return -1;
+	}
+	
+	status = initProcTable (pt);
+	if (status == -1) {
+		free (pt);
+		free (cmd);
+		return -1;
+	}
+	status = initCommand (cmd);
+	if (status == -1) {
+		destroyProcTable (pt);
+		free (pt);
+		free (cmd);
+		return -1;
+	}
+	
+	/* run shell */
+	do { 
+		type_prompt(); 
+		status = parseInput (cmd, pt);
+		if (status == -1) {
+			cleanup (cmd, pt);
+			free (pt);
+			free (cmd);
+			return -1;
 		}
-		int stat;
-		pid=fork ();
-		if (pid!=0) { // parent
-			printf ("parent says hi\n");
-			if (!background) {
-				waitpid(pid, &stat, 0);
-			}
-			reset();
+		else if (status == 0) {
+			printf ("there is a parse error in your command\n");
+			while (yylex()!=NEWLINE) { }
 		}
-		else { // child
-			printf ("child says hi\n");
-			if (argn==0) { // empty command
-				return 0;
-			}
-			int fdin, fdout;
-			if (fdoutPath) {
-				printf ("changing stdout\n");
-				fdout=open(fdoutPath,O_RDWR);
-				if (fdout==-1) {
-					printf ("error opening out: %s\n", fdoutPath);
-					exit_shell();
-				}
-				close (1);
-				dup(fdout);
-				close (fdout);
-			}
-			if (fdinPath) {
-				printf ("chaning stdin\n");
-				fdin=open(fdinPath,O_RDONLY);
-				if (fdin==-1) {
-					printf ("error opening in: %s\n", fdinPath);
-					return FAIL;
-				}
-				close (0);
-				dup(fdin);
-				close (fdin);
-			}
-			printf ("executing %s ", args[0]);
-			for (int i=1; i < argn; i++) printf ("%s ", args[i]);
-			printf ("\n");
-			int result = execvp(args[0], args);
-			if (result == -1) {
-				printf ("command execution of %s returned error (errno=%d)\n", argv[0], errno);
-				return -1;
-			}
-			return 0;
+		else {
+			status = executeCmd (cmd, pt);
 		}
-	} while (pid != 0); // only parent continues
-	printf ("if here, quit\n");
+		destroyCommand (cmd);
+		status = initCommand (cmd);
+		if (status == -1) {
+			cleanup (cmd, pt);
+			free (pt);
+			free (cmd);
+			return -1;
+		}		
+	} while (1); 
+	
 	return 0;
 }
 

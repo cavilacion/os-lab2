@@ -1,7 +1,7 @@
 CC=gcc
 CFLAGS=-Wall -std=c99
-all: scanner
-	${CC} -o a.out ${CFLAGS} lex.yy.c -lfl
+all: scanner shell.c parser.c
+	${CC} -o minishell ${CFLAGS} lex.yy.c shell.c parser.c -lfl
 
 scanner: scanner.fl
 	flex scanner.fl
