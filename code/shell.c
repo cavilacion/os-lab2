@@ -36,6 +36,7 @@ int initPipeline (pipeline *p) {
 	p->maxArg=64;
 	p->argv=safeMalloc (p->maxArg*sizeof(char*));
 	if (p->argv==NULL) return -1;
+	p->argv[0]='\0';
 	p->fdinPath=NULL;
 	p->fdoutPath=NULL;
 	return 0;
